@@ -5,6 +5,7 @@ import random as rand
 import tkinter as tk
 from tkinter import messagebox as msg, filedialog as fd, ttk
 from pyperclip import copy
+import subprocess
 character="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 special="!@#$%^&*()_+|}{:<>?`~"
 digit="1234567890"
@@ -35,8 +36,14 @@ def make_password():
     password_entry.insert(0, password)
     password_entry.configure(state="disabled", disabledforeground="white", disabledbackground="black")
 def brute_force():
-    global users_password
+    global users_password, guesses
     users_password=brute_password.get()
+    if not users_password:
+        msg.showerror("Error", "Please enter a password to brute force")
+        return
+    guesses = 0
+    brute_bar["value"] = 0
+    brute_pct_label.config(text="Estimated progress: 0%")
     if check_if_digit()==True and check_if_symbol()==False:
         brute_password_digits_pre()
     elif check_if_digit()==False and check_if_symbol()==True:
@@ -60,12 +67,18 @@ def brute_password_with_special_pre():
     global users_password
     password_length=len(users_password)
     start_time=perf_counter()
-    
+    charset = character + special
+    total = len(charset) ** password_length
     def brute_password_with_special():
-        password="".join(rand.choices(character+special,k=password_length))
+        global guesses
+        password="".join(rand.choices(charset,k=password_length))
         guesses+=1
+        pct = min((guesses / total) * 100, 100)
+        brute_bar["value"] = pct
+        brute_pct_label.config(text=f"Estimated progress: {pct:.4f}%")
         if password==users_password:
-            
+            brute_bar["value"] = 100
+            brute_pct_label.config(text="Estimated progress: 100%")
             end_time=perf_counter()
             elapsed_time=end_time-start_time
             brute_log.config(state="normal")
@@ -81,13 +94,18 @@ def brute_password_normal_pre():
     global users_password
     password_length=len(users_password)
     start_time=perf_counter()
-    
+    charset = character
+    total = len(charset) ** password_length
     def brute_password_normal():
         global guesses
-        password="".join(rand.choices(character,k=password_length))
+        password="".join(rand.choices(charset,k=password_length))
         guesses+=1
+        pct = min((guesses / total) * 100, 100)
+        brute_bar["value"] = pct
+        brute_pct_label.config(text=f"Estimated progress: {pct:.4f}%")
         if password==users_password:
-            
+            brute_bar["value"] = 100
+            brute_pct_label.config(text="Estimated progress: 100%")
             end_time=perf_counter()
             elapsed_time=end_time-start_time
             brute_log.config(state="normal")
@@ -103,12 +121,18 @@ def brute_password_digits_pre():
     global users_password
     password_length=len(users_password)
     start_time=perf_counter()
+    charset = digit
+    total = len(charset) ** password_length
     def brute_password_digits():
         global guesses
-        password="".join(rand.choices(digit,k=password_length))
+        password="".join(rand.choices(charset,k=password_length))
         guesses+=1
+        pct = min((guesses / total) * 100, 100)
+        brute_bar["value"] = pct
+        brute_pct_label.config(text=f"Estimated progress: {pct:.4f}%")
         if password==users_password:
-            
+            brute_bar["value"] = 100
+            brute_pct_label.config(text="Estimated progress: 100%")
             end_time=perf_counter()
             elapsed_time=end_time-start_time
             brute_log.config(state="normal")
@@ -124,14 +148,18 @@ def brute_password_special_digits_pre():
     global users_password
     password_length=len(users_password)
     start_time=perf_counter()
-
-    
+    charset = special + digit + character
+    total = len(charset) ** password_length
     def brute_password_special_digits():
         global guesses
-        password="".join(rand.choices(special+digit+character,k=password_length))
+        password="".join(rand.choices(charset,k=password_length))
         guesses+=1
+        pct = min((guesses / total) * 100, 100)
+        brute_bar["value"] = pct
+        brute_pct_label.config(text=f"Estimated progress: {pct:.4f}%")
         if password==users_password:
-            
+            brute_bar["value"] = 100
+            brute_pct_label.config(text="Estimated progress: 100%")
             end_time=perf_counter()
             elapsed_time=end_time-start_time
             brute_log.config(state="normal")
@@ -150,26 +178,61 @@ root.geometry("500x600")
 root.attributes("-fullscreen", True)
 root.configure(bg="black")
 
-title=tk.Label(root, text="Password Generator And Brute Forcer", font=("Arial", 30, "bold"), bg="black", fg="white")
+page_canvas=tk.Canvas(root, bg="black", highlightthickness=0)
+page_scrollbar=tk.Scrollbar(root, orient="vertical", command=page_canvas.yview)
+page_canvas.configure(yscrollcommand=page_scrollbar.set)
+
+page_scrollbar.pack(side="right", fill="y")
+page_canvas.pack(side="left", fill="both", expand=True)
+
+content_frame=tk.Frame(page_canvas, bg="black")
+page_window=page_canvas.create_window((0, 0), window=content_frame, anchor="nw")
+
+def _on_content_configure(event):
+    page_canvas.configure(scrollregion=page_canvas.bbox("all"))
+
+def _on_canvas_configure(event):
+    page_canvas.itemconfig(page_window, width=event.width)
+
+content_frame.bind("<Configure>", _on_content_configure)
+page_canvas.bind("<Configure>", _on_canvas_configure)
+
+def _page_mousewheel(event):
+    w = event.widget
+    try:
+        if w == brute_log or w == brute_log_scroll or str(w).startswith(str(brute_log_frame)):
+            return
+    except Exception:
+        pass
+    page_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+root.bind_all("<MouseWheel>", _page_mousewheel)
+
+title=tk.Label(content_frame, text="Password Generator And Brute Forcer", font=("Arial", 30, "bold"), bg="black", fg="white")
 title.pack(anchor="w", padx=20, pady=20)
 
-gen_title=tk.Label(root, text="Password Generator", font=("Arial", 25, "bold"), bg="black", fg="white")
+logo=tk.PhotoImage(file="Lock(WHITE).png")
+logo=logo.zoom(3,3)
+logo_label=tk.Label(root, image=logo, bg="black")
+logo_label.place(relx=1.0,x=-20,y=10, anchor="ne")
+
+gen_title=tk.Label(content_frame, text="Password Generator", font=("Arial", 25, "bold"), bg="black", fg="white")
 gen_title.pack(anchor="w", padx=20, pady=20)
 
-separator=tk.Frame(root, height=2, bg="white")
+separator=tk.Frame(content_frame, height=2, bg="white")
 separator.pack(fill="x", padx=20, pady=20)
 
-password_label=tk.Label(root, text="Enter password length:", font=("Arial", 20), bg="black", fg="white")
+password_label=tk.Label(content_frame, text="Enter password length:", font=("Arial", 20), bg="black", fg="white")
 password_label.pack(anchor="w",padx=10, pady=10)
 
-password_length=tk.Entry(root, font=("Arial", 20), bg="black", fg="white", insertbackground="white", insertwidth=2)
+password_length=tk.Entry(content_frame, font=("Arial", 20), bg="black", fg="white", insertbackground="white", insertwidth=2)
 password_length.insert(0, " ")
 password_length.pack(anchor="w",padx=10, pady=10)
 
-generate_button=tk.Button(root, text="Generate Password", font=("Arial", 20), bg="black", fg="white", command=make_password)
+generate_button=tk.Button(content_frame, text="Generate Password", font=("Arial", 20), bg="black", fg="white", command=make_password)
 generate_button.pack(anchor="w",padx=10, pady=10)
 style=ttk.Style()
-checkbox_frame=tk.Frame(root, bg="black")
+checkbox_frame=tk.Frame(content_frame, bg="black")
 checkbox_frame.pack(anchor="w", padx=10, pady=10)
 
 special_var=tk.BooleanVar(master=root, value=False)
@@ -203,7 +266,7 @@ digits.pack(side="left", padx=10, pady=10)
 characters.pack(side="left", padx=10, pady=10)
 
 
-password_frame=tk.Frame(root, bg="black")
+password_frame=tk.Frame(content_frame, bg="black")
 password_frame.pack(anchor="w", padx=10, pady=10)
 
 password_label=tk.Label(password_frame, text="Password:", font=("Arial", 20), bg="black", fg="white")
@@ -212,20 +275,20 @@ password_label.pack(side="left", padx=10, pady=10)
 password_entry=tk.Entry(password_frame, font=("Arial", 20), bg="black", fg="white", state="readonly", readonlybackground="black")
 password_entry.pack(side="left",padx=10,pady=10)
 
-copy_password=tk.Button(root, text="Copy Password", font=("Arial", 20), bg="black", fg="white")
+copy_password=tk.Button(content_frame, text="Copy Password", font=("Arial", 20), bg="black", fg="white")
 copy_password.pack(anchor="w", padx=10, pady=10)
 copy_password.config(command=lambda: copy(password_entry.get()))
 
-separator1=tk.Frame(root, height=2, bg="white")
+separator1=tk.Frame(content_frame, height=2, bg="white")
 separator1.pack(fill="x", padx=20, pady=20)
 
-brute_title=tk.Label(root, text="Brute Force", font=("Arial", 25, "bold"), bg="black", fg="white")
+brute_title=tk.Label(content_frame, text="Brute Force", font=("Arial", 25, "bold"), bg="black", fg="white")
 brute_title.pack(anchor="w", padx=10, pady=10)
 
-seperator2=tk.Frame(root, height=2, bg="white")
+seperator2=tk.Frame(content_frame, height=2, bg="white")
 seperator2.pack(fill="x", padx=20, pady=20)
 
-brute_password_frame=tk.Frame(root, bg="black")
+brute_password_frame=tk.Frame(content_frame, bg="black")
 brute_password_frame.pack(anchor="w", padx=10, pady=10)
 
 brute_label=tk.Label(brute_password_frame, text="Enter the password to brute force:", font=("Arial", 20), bg="black", fg="white")
@@ -236,16 +299,38 @@ brute_password.pack(side="left", padx=10, pady=10)
 
 brute_command=brute_force
 
-brute_button=tk.Button(root, text="Brute Force", font=("Arial", 20), bg="black", fg="white", command=brute_command)
+brute_button=tk.Button(content_frame, text="Brute Force", font=("Arial", 20), bg="black", fg="white", command=brute_command)
 brute_button.pack(anchor="w", padx=10, pady=10)
 
-brute_bar=ttk.Progressbar(root, orient="horizontal", length=400, mode="indeterminate")
-brute_bar.pack(anchor="w", padx=10, pady=10)
+brute_bar=ttk.Progressbar(content_frame, orient="horizontal", mode="determinate", maximum=100)
+brute_bar.pack(anchor="w", fill="x", padx=10, pady=10)
 
-brute_log=tk.Text(root, font=("Arial", 20), bg="black", fg="white", state="disabled")
+brute_pct_label=tk.Label(content_frame, text="Estimated progress: 0%", font=("Arial", 14), bg="black", fg="white")
+brute_pct_label.pack(anchor="w", padx=10, pady=(0, 10))
+
+
+brute_log_frame=tk.Frame(content_frame, bg="black")
+brute_log_frame.pack(anchor="w", fill="both", expand=True, padx=10, pady=10)
+
+brute_log_scroll=tk.Scrollbar(brute_log_frame, orient="vertical")
+brute_log_scroll.pack(side="right", fill="y")
+
+brute_log=tk.Text(brute_log_frame, font=("Arial", 20), bg="black", fg="white", state="disabled", height=20, wrap="word", yscrollcommand=brute_log_scroll.set)
 brute_log.config(state="normal")
 brute_log.insert("end", "v1.0 Brute Forcer\n")
 brute_log.config(state="disabled")
-brute_log.pack(anchor="w", padx=10, pady=10)
+brute_log.pack(side="left", fill="both", expand=True)
+
+brute_log_scroll.config(command=brute_log.yview)
+
+def _brute_log_mousewheel(event):
+    brute_log.yview_scroll(int(-1 * (event.delta / 120)), "units")
+    return "break"
+
+brute_log.bind("<MouseWheel>", _brute_log_mousewheel)
+brute_log.bind("<Button-4>", lambda e: (brute_log.yview_scroll(-1, "units"), "break"))
+brute_log.bind("<Button-5>", lambda e: (brute_log.yview_scroll(1, "units"), "break"))
+brute_log_frame.bind("<MouseWheel>", _brute_log_mousewheel)
+brute_log.bind("<Enter>", lambda e: brute_log.focus_set())
 
 root.mainloop()
